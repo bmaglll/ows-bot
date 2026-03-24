@@ -66,5 +66,4 @@ Daily logs are written to `logs/YYYY-MM-DD/`:
 ows_bot.py       — main automation script
 ows_fixes.py     — error fix registry with 20+ auto-fix handlers
 close_claim.py   — utility to close open claim tabs
-error-handling.md — error code reference
 ```

@@ -2,27 +2,25 @@
 __pycache__/
 *.pyc
 
-# Logs & debug artifacts
+# Logs & debug
 logs/
 *.csv
-ows_debug_*.png
-ows_debug_*.html
 
-# RO lists
-ro_number.txt
-remaining.txt
+# Screenshots & HTML dumps
+*.png
+*.html
+
+# PDFs & media
+*.pdf
+*.mp3
 
 # Environment & secrets
 .env
 .claude/
 
-# Reference docs (PDFs, audio)
-reference-docs/
-CSR.pdf
+# Assets & docs
 assets/
+reference-docs/
 
-# Misc
-agent-prompt.md
-diagnose_parts_grid.py
-shell.nix
-CLAUDE.md
+# Nix
+*.nix

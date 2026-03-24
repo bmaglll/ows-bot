@@ -36,19 +36,28 @@ export ANTHROPIC_API_KEY=your_key_here
 
 ## Usage
 
+### Single RO — processes all claim lines under the repair order
 ```bash
-# Single RO
 python3 ows_bot.py 513271
-
-# Target a specific claim line
-python3 ows_bot.py 510689-05
-
-# Interactive prompt
-python3 ows_bot.py
-
-# Batch — reads from ro_number.txt
-python3 ows_bot.py --batch
 ```
+
+### Specific claim line — targets one line within an RO
+```bash
+python3 ows_bot.py 513271-05
+```
+
+### Batch file — processes multiple ROs sequentially
+Create a `.txt` file with one RO number per line:
+```
+513271
+514075
+510689
+```
+Then pass the file:
+```bash
+python3 ows_bot.py ros.txt
+```
+The bot will process each RO in order before stopping.
 
 ## Logging
 

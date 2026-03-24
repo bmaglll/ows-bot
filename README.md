@@ -12,7 +12,7 @@ Automated warranty claim submission tool built with Playwright. Connects to a ru
 
 ## Prerequisites
 
-- Python 3.12+ with `playwright` and `anthropic` packages
+- Python 3.12+ with `playwright`
 - Chromium launched with remote debugging:
   ```bash
   chromium --remote-debugging-port=9222
@@ -22,7 +22,16 @@ Automated warranty claim submission tool built with Playwright. Connects to a ru
 ### Install Dependencies
 
 ```bash
-pip install playwright anthropic
+pip install playwright
+```
+
+#### Auto Condition Code / Customer Code (optional)
+
+The ROV0068 error fix uses the Anthropic API as a fallback to determine the correct Condition Code when lookup tables don't have a match. To enable this:
+
+```bash
+pip install anthropic
+export ANTHROPIC_API_KEY=your_key_here
 ```
 
 ## Usage
@@ -58,5 +67,4 @@ ows_bot.py       — main automation script
 ows_fixes.py     — error fix registry with 20+ auto-fix handlers
 close_claim.py   — utility to close open claim tabs
 error-handling.md — error code reference
-shell.nix        — NixOS dev environment
 ```

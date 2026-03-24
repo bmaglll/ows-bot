@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+
+# Logs & debug artifacts
+logs/
+*.csv
+ows_debug_*.png
+ows_debug_*.html
+
+# RO lists
+ro_number.txt
+remaining.txt
+
+# Environment & secrets
+.env
+.claude/
+
+# Reference docs (PDFs, audio)
+reference-docs/
+CSR.pdf
+assets/
+
+# Misc
+agent-prompt.md
+diagnose_parts_grid.py
+shell.nix

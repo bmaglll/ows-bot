@@ -15,6 +15,8 @@ from playwright.sync_api import Page, Frame
 
 PREVALIDATE_BTN_SEL = "button[onclick*='PreValidate'], button:has-text('PreValidate')"
 
+_CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+
 # ── Recall bulletin lookup (pre-extracted from reference-docs/recalls/) ──────
 # Each entry: subcode → {cc, ccc, causal_part, causal_qty}
 SUBCODE_LOOKUP = {
@@ -1134,7 +1136,7 @@ def infer_cc_with_claude(comments: str) -> str | None:
     try:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=_CLAUDE_MODEL,
             max_tokens=10,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -1332,7 +1334,10 @@ def fix_lab0019_stars_id(page: Page, claim_frame: Frame) -> bool:
     LAB0019 — Technician Identification is required on all Ford standard labor
     operations.  Fix: fill every empty ServiceTechnicianID input with 002498102.
     """
-    STARS_ID = "002498102"
+    STARS_ID = os.getenv("STARS_ID", "")
+    if not STARS_ID:
+        log("LAB0019 fix skipped: STARS_ID is not set. Add STARS_ID=<your_id> to your .env file.")
+        return False
     log(f"Applying LAB0019 fix: entering STARS ID '{STARS_ID}' into ServiceTechnicianID fields …")
     filled = 0
     for fr in all_frames(page):
@@ -1561,7 +1566,7 @@ def infer_part_with_claude(comments: str) -> str | None:
     try:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=_CLAUDE_MODEL,
             max_tokens=30,
             messages=[{"role": "user", "content": prompt}],
         )

@@ -5,10 +5,13 @@ Usage:
     python3 close_claim.py
 """
 from __future__ import annotations
+import os
 import time
+from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
-CDP_URL = "http://127.0.0.1:9222"
+load_dotenv()
+CDP_URL = os.getenv("CDP_URL", "http://127.0.0.1:9222")
 
 
 def log(msg: str) -> None:

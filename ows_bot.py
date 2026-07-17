@@ -25,9 +25,11 @@ from playwright.sync_api import (
     Page,
     Frame,
 )
+from dotenv import load_dotenv
+load_dotenv()
 from ows_fixes import try_fix_errors
 # ── Config ────────────────────────────────────────────────────────────────────
-CDP_URL            = "http://127.0.0.1:9222"
+CDP_URL            = os.getenv("CDP_URL", "http://127.0.0.1:9222")
 DEFAULT_TIMEOUT_MS = 30_000
 SHORT_TIMEOUT_MS   = 5_000
 POLL_INTERVAL_S    = 2.0   # seconds between "Paid" status polls

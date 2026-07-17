@@ -9,11 +9,14 @@ Run:
     /home/bmag/projects/work/ows/diagnose_parts_grid.py
 """
 from __future__ import annotations
+import os
 import re
 import sys
+from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
-CDP_URL = "http://127.0.0.1:9222"
+load_dotenv()
+CDP_URL = os.getenv("CDP_URL", "http://127.0.0.1:9222")
 TARGET_PART = "W520214S440"
 
 DIVIDER = "-" * 72

@@ -22,7 +22,7 @@ Automated warranty claim submission tool built with Playwright. Connects to a ru
 ### Install Dependencies
 
 ```bash
-pip install playwright
+pip install playwright python-dotenv
 ```
 
 #### Auto Condition Code / Customer Code (optional)
@@ -31,8 +31,22 @@ The ROV0068 error fix uses the Anthropic API as a fallback to determine the corr
 
 ```bash
 pip install anthropic
-export ANTHROPIC_API_KEY=your_key_here
 ```
+
+### Configuration
+
+Copy the example env file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `STARS_ID` | Yes | Your technician STARS ID (used by the LAB0019 auto-fix) |
+| `ANTHROPIC_API_KEY` | No | Anthropic API key for AI-assisted condition code inference |
+| `CDP_URL` | No | Chrome DevTools Protocol URL (default: `http://127.0.0.1:9222`) |
+| `CLAUDE_MODEL` | No | Claude model for AI fixes (default: `claude-haiku-4-5-20251001`) |
 
 ## Usage
 

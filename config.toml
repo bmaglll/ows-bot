@@ -1,0 +1,160 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# OWS Bot configuration
+#
+# This file holds everything you'd otherwise have to edit Python code to
+# change: technicians, error handling lists, recall lookups, rental rates,
+# subcodes, timeouts, etc.
+#
+# Personal overrides (e.g. your own STARS ID) can go in `config.local.toml`
+# (same format, gitignored) — values there win over this file.
+# Environment variables / .env win over both (STARS_ID, CDP_URL, CLAUDE_MODEL).
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ── Technicians ───────────────────────────────────────────────────────────────
+# Add one [[technicians.list]] block per technician.
+# `default` selects whose STARS ID is used by the LAB0019 auto-fix
+# (fills empty ServiceTechnicianID fields on labor lines).
+# The STARS_ID environment variable, if set, overrides the default technician.
+[technicians]
+default = "example"
+
+[[technicians.list]]
+key = "example"                # short handle used by `default` above
+name = "Example Technician"    # display name (informational)
+stars_id = "000000000"         # 9-digit STARS technician ID
+
+# [[technicians.list]]
+# key = "jsmith"
+# name = "J. Smith"
+# stars_id = "002498102"
+
+# ── Connection ────────────────────────────────────────────────────────────────
+[connection]
+# Chrome DevTools Protocol URL of the already-running Chromium.
+# Overridden by the CDP_URL environment variable.
+cdp_url = "http://127.0.0.1:9222"
+
+# ── Timeouts / polling ────────────────────────────────────────────────────────
+[timeouts]
+default_ms = 30000       # general Playwright wait timeout
+short_ms = 5000          # short waits (close buttons, etc.)
+poll_interval_s = 2.0    # seconds between "Paid" status polls
+poll_timeout_s = 30      # max seconds to poll for Paid before moving on
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+[logging]
+base_dir = "logs"        # daily logs are written to <base_dir>/YYYY-MM-DD/
+
+# ── Claude / AI-assisted fixes (optional) ─────────────────────────────────────
+[claude]
+# Model used for condition-code / part inference fallbacks.
+# Overridden by the CLAUDE_MODEL environment variable.
+model = "claude-haiku-4-5-20251001"
+
+# ── Approval codes entered by auto-fixes ──────────────────────────────────────
+# error code = approval code typed into the Approval Code field
+[approval_codes]
+SFRU473 = "DDDO"    # daily rate exceeds amount
+ODM0001 = "DDR4"    # distance not equal to same-day paid visit
+ODM0002 = "DDR4"    # distance less than earlier paid visit
+RRP0001 = "DDR1"    # potential repeat repair
+BES0027 = "DDET"    # date too old
+
+# ── Subcode behavior ──────────────────────────────────────────────────────────
+[subcodes]
+# Subcodes that always map to condition code 82 (Freight/Postage/Maintenance)
+cc_82 = ["PRENT", "QCM", "P11"]
+
+# Labor ops deleted by the SFRUC09 fix (test drive with unchanged mileage).
+# Add new codes here as they are encountered.
+test_drive_ops = ["7001D1", "1006DXQ"]
+
+# Subcode entered by the SFRU448 / SFRU430 fix ("PLEASE USE SUB CODE")
+sfru448_subcode = "LTIS"
+
+# ── Rental claims ─────────────────────────────────────────────────────────────
+[rental]
+default_daily_rate = 45     # $/day for regular vehicles
+premium_daily_rate = 60     # $/day for models listed below
+premium_models = [
+    "F-150", "F-250", "F-350", "F-450", "F-550", "F-600",
+    "F150", "F250", "F350", "F450", "F550", "F600", "TRANSIT",
+]
+prent_max_days = 10         # PRENT subcode allowed up to this many days, else P11
+
+# ── Recall bulletin lookup ────────────────────────────────────────────────────
+# subcode → condition code (cc), customer concern code (ccc), causal part + qty.
+# Used by SUB0003 / SUB0006 / SCCK032 / ROV0068 fixes on type-31 recall claims.
+# Add a new block whenever a new recall shows up.
+[recalls."26P02"]
+cc = "04"
+ccc = "G07"
+causal_part = "14B291"
+causal_qty = "0"
+
+[recalls."25P21"]
+cc = "42"
+ccc = "C05"
+causal_part = "19703"
+causal_qty = "0"
+
+[recalls."25B06"]
+cc = "X9"
+ccc = "S40"
+causal_part = "14B321"
+causal_qty = "0"
+
+[recalls."24N08"]
+cc = "28"
+ccc = "S26"
+causal_part = "7861203"
+causal_qty = "0"
+
+[recalls."22N17"]
+cc = "91"
+ccc = "G07"
+causal_part = "14529"
+causal_qty = "0"
+
+[recalls."25P35"]
+cc = "41"
+ccc = "G07"
+causal_part = "1621597"
+causal_qty = "0"
+
+[recalls."24U14"]
+cc = "04"
+ccc = "A07"
+causal_part = "18D890"
+causal_qty = "0"
+
+[recalls."25B61"]
+cc = "39"
+ccc = "P50"
+causal_part = "7S004"
+causal_qty = "0"
+
+# ── Error triage ──────────────────────────────────────────────────────────────
+[user_review]
+# Error codes that need human review — the claim is skipped and logged
+# instead of stopping the whole batch.
+errors = [
+    "RDC0002", "FSA0001", "FSA0003", "FSA0022", "ROV0039", "MCA0004",
+    "TOT0001", "RVC0011", "SUB0001", "SUB0003", "SUB0021", "SCCK112",
+    "SCCK109", "SCCK075", "SCCK069", "SCCK062", "SCCK055", "SCCK050",
+    "SCCK046", "SCCK012", "SCCK602", "BES0206", "BES0254", "SFRNG81",
+    "PAC1023", "LAB0003", "ATT0001", "SUB0005", "SDCU903", "SFRU462",
+    "MIS0005", "SFRU330", "SFRUC13", "EFC16335", "SUB0013", "ROV0068",
+    "SFRUD96", "ROV0024", "SCCK005", "LAB0005", "SFRU364", "BOM0002",
+    "SFRNG46", "RVC0013", "SFRU733", "TV0001", "MIS0002", "SFPNK20",
+]
+
+# Human-readable notes shown in log output for specific user-review errors
+[user_review.notes]
+ATT0001 = "Requires document attachment"
+
+# ── Error scraping ────────────────────────────────────────────────────────────
+[scrape]
+# Part numbers / non-error strings the message-code regex picks up as
+# false positives — never treated as errors.
+false_positive_codes = ["MHT7000", "CPR0126", "REH52"]

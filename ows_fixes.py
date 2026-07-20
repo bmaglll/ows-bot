@@ -12,30 +12,26 @@ import time
 from datetime import date
 from playwright.sync_api import Page, Frame
 
+from ows_config import (
+    CONFIG,
+    get_approval_code,
+    get_claude_model,
+    get_stars_id,
+)
+
 
 PREVALIDATE_BTN_SEL = "button[onclick*='PreValidate'], button:has-text('PreValidate')"
 
-_CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
-
-# ── Recall bulletin lookup (pre-extracted from reference-docs/recalls/) ──────
+# ── Recall bulletin lookup (edit in config.toml → [recalls]) ─────────────────
 # Each entry: subcode → {cc, ccc, causal_part, causal_qty}
-SUBCODE_LOOKUP = {
-    "26P02": {"cc": "04", "ccc": "G07", "causal_part": "14B291", "causal_qty": "0"},
-    "25P21": {"cc": "42", "ccc": "C05", "causal_part": "19703", "causal_qty": "0"},
-    "25B06": {"cc": "X9", "ccc": "S40", "causal_part": "14B321", "causal_qty": "0"},
-    "24N08": {"cc": "28", "ccc": "S26", "causal_part": "7861203", "causal_qty": "0"},
-    "22N17": {"cc": "91", "ccc": "G07", "causal_part": "14529", "causal_qty": "0"},
-    "25P35": {"cc": "41", "ccc": "G07", "causal_part": "1621597", "causal_qty": "0"},
-    "24U14": {"cc": "04", "ccc": "A07", "causal_part": "18D890", "causal_qty": "0"},
-    "25B61": {"cc": "39", "ccc": "P50", "causal_part": "7S004", "causal_qty": "0"},
-}
+SUBCODE_LOOKUP = {k.upper(): v for k, v in CONFIG["recalls"].items()}
 
 # Subcodes that always map to condition code 82 (Freight/Postage/Maintenance)
-SUBCODE_CC_82 = {"PRENT", "QCM", "P11"}
+SUBCODE_CC_82 = {c.upper() for c in CONFIG["subcodes"]["cc_82"]}
 
 # Labor ops to delete for SFRUC09 (test drive with unchanged mileage)
-# Add new codes here as they are encountered
-TEST_DRIVE_OPS = {"7001D1", "1006DXQ"}
+# Add new codes in config.toml → [subcodes] test_drive_ops
+TEST_DRIVE_OPS = {c.upper() for c in CONFIG["subcodes"]["test_drive_ops"]}
 
 # All valid 2-char condition codes from OWS User Guide V10.16
 VALID_CONDITION_CODES = {
@@ -131,7 +127,8 @@ def log(msg: str) -> None:
 
 
 def all_frames(page: Page) -> list[Frame]:
-    return [page.main_frame] + list(page.frames)
+    # page.frames already contains main_frame — keep it first, don't double it
+    return [page.main_frame] + [f for f in page.frames if f is not page.main_frame]
 
 
 def add_causal_part(page: Page, part_number: str) -> str | None:
@@ -336,28 +333,27 @@ def fill_approval_code(page: Page, code: str) -> bool:
     return False
 
 
-def fix_sfru473(page: Page, claim_frame: Frame) -> bool:
-    """SFRU473 — Daily rate exceeds amount. Fix: Enter 'DDDO' into Approval Code."""
-    log("Applying SFRU473 fix: entering 'DDDO' into Approval Code field …")
-    return fill_approval_code(page, "DDDO")
+def _approval_code_fix(error_code: str, fallback: str):
+    """Build a fix function that enters a configured approval code
+    (config.toml → [approval_codes]) into the Approval Code field."""
+    def fix(page: Page, claim_frame: Frame) -> bool:
+        code = get_approval_code(error_code, fallback)
+        log(f"Applying {error_code} fix: entering '{code}' into Approval Code field …")
+        return fill_approval_code(page, code)
+    fix.__name__ = f"fix_{error_code.lower()}"
+    fix.__doc__ = (f"{error_code} — enters approval code "
+                   f"'{get_approval_code(error_code, fallback)}' (config.toml → [approval_codes]).")
+    return fix
 
 
-def fix_odm0001(page: Page, claim_frame: Frame) -> bool:
-    """ODM0001 — Distance not equal to same-day paid visit. Fix: Enter 'DDR4' into Approval Code."""
-    log("Applying ODM0001 fix: entering 'DDR4' into Approval Code field …")
-    return fill_approval_code(page, "DDR4")
-
-
-def fix_odm0002(page: Page, claim_frame: Frame) -> bool:
-    """ODM0002 — Distance less than earlier paid visit. Fix: Enter 'DDR4' into Approval Code."""
-    log("Applying ODM0002 fix: entering 'DDR4' into Approval Code field …")
-    return fill_approval_code(page, "DDR4")
-
-
-def fix_rrp0001(page: Page, claim_frame: Frame) -> bool:
-    """RRP0001 — Potential repeat repair. Fix: Enter 'DDR1' into Approval Code."""
-    log("Applying RRP0001 fix: entering 'DDR1' into Approval Code field …")
-    return fill_approval_code(page, "DDR1")
+# SFRU473 — Daily rate exceeds amount
+fix_sfru473 = _approval_code_fix("SFRU473", "DDDO")
+# ODM0001 — Distance not equal to same-day paid visit
+fix_odm0001 = _approval_code_fix("ODM0001", "DDR4")
+# ODM0002 — Distance less than earlier paid visit
+fix_odm0002 = _approval_code_fix("ODM0002", "DDR4")
+# RRP0001 — Potential repeat repair
+fix_rrp0001 = _approval_code_fix("RRP0001", "DDR1")
 
 
 def get_vehicle_description(page: Page) -> str:
@@ -386,17 +382,16 @@ def get_vehicle_description(page: Page) -> str:
 
 
 def get_rental_daily_rate(page: Page) -> int:
-    """Return daily rental rate based on vehicle: $60 for F-series/Transit, $45 otherwise."""
+    """Return daily rental rate based on vehicle (config.toml → [rental])."""
+    rental = CONFIG["rental"]
     vehicle = get_vehicle_description(page).upper()
     log(f"Vehicle description: '{vehicle}'")
-    f_series = ["F-150", "F-250", "F-350", "F-450", "F-550", "F-600",
-                "F150", "F250", "F350", "F450", "F550", "F600", "TRANSIT"]
-    for model in f_series:
-        if model in vehicle:
-            log(f"Vehicle matches '{model}' → $60/day rate")
-            return 60
-    log("Vehicle does not match F-series/Transit → $45/day rate")
-    return 45
+    for model in rental["premium_models"]:
+        if model.upper() in vehicle:
+            log(f"Vehicle matches '{model}' → ${rental['premium_daily_rate']}/day rate")
+            return rental["premium_daily_rate"]
+    log(f"Vehicle does not match premium models → ${rental['default_daily_rate']}/day rate")
+    return rental["default_daily_rate"]
 
 
 def _read_expense_amount(page: Page) -> float | None:
@@ -693,10 +688,11 @@ def fix_rental_claim(page: Page, claim_frame: Frame) -> bool:
     # ── Calculate and fill rental days from amount ─────────────────────────
     days = _calculate_and_fill_days(page)
 
+    prent_max_days = CONFIG["rental"]["prent_max_days"]
     if days is None:
         log("Could not calculate rental days — defaulting to PRENT.")
         subcode = "PRENT"
-    elif days <= 10:
+    elif days <= prent_max_days:
         subcode = "PRENT"
     else:
         subcode = "P11"
@@ -1136,7 +1132,7 @@ def infer_cc_with_claude(comments: str) -> str | None:
     try:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model=_CLAUDE_MODEL,
+            model=get_claude_model(),
             max_tokens=10,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -1307,9 +1303,11 @@ def fix_rvc0011_validation_code(page: Page, claim_frame: Frame) -> bool:
 def fix_sfru448_subcode(page: Page, claim_frame: Frame) -> bool:
     """
     SFRU448 — PLEASE USE SUB CODE.
-    Fix: Enter 'LTIS' into the ProgramCode (subcode) field.
+    Fix: Enter the configured subcode (config.toml → [subcodes] sfru448_subcode)
+    into the ProgramCode (subcode) field.
     """
-    log("Applying SFRU448 fix: entering 'LTIS' into subcode field …")
+    subcode = CONFIG["subcodes"]["sfru448_subcode"]
+    log(f"Applying SFRU448 fix: entering '{subcode}' into subcode field …")
     for fr in all_frames(page):
         try:
             prog_inputs = fr.locator("input[name*='ProgramCode']").all()
@@ -1317,9 +1315,9 @@ def fix_sfru448_subcode(page: Page, claim_frame: Frame) -> bool:
                 try:
                     if inp.is_visible():
                         inp.click()
-                        inp.fill("LTIS")
+                        inp.fill(subcode)
                         time.sleep(0.5)
-                        log("Entered 'LTIS' into ProgramCode field.")
+                        log(f"Entered '{subcode}' into ProgramCode field.")
                         return True
                 except Exception:
                     continue
@@ -1332,11 +1330,13 @@ def fix_sfru448_subcode(page: Page, claim_frame: Frame) -> bool:
 def fix_lab0019_stars_id(page: Page, claim_frame: Frame) -> bool:
     """
     LAB0019 — Technician Identification is required on all Ford standard labor
-    operations.  Fix: fill every empty ServiceTechnicianID input with 002498102.
+    operations.  Fix: fill every empty ServiceTechnicianID input with the
+    default technician's STARS ID (config.toml → [technicians], or STARS_ID env).
     """
-    STARS_ID = os.getenv("STARS_ID", "")
+    STARS_ID = get_stars_id()
     if not STARS_ID:
-        log("LAB0019 fix skipped: STARS_ID is not set. Add STARS_ID=<your_id> to your .env file.")
+        log("LAB0019 fix skipped: no STARS ID configured. Set one in config.toml "
+            "([technicians] section) or as STARS_ID in your .env file.")
         return False
     log(f"Applying LAB0019 fix: entering STARS ID '{STARS_ID}' into ServiceTechnicianID fields …")
     filled = 0
@@ -1361,10 +1361,8 @@ def fix_lab0019_stars_id(page: Page, claim_frame: Frame) -> bool:
     return False
 
 
-def fix_bes0027(page: Page, claim_frame: Frame) -> bool:
-    """BES0027 — Date too old. Fix: Enter 'DDET' into Approval Code."""
-    log("Applying BES0027 fix: entering 'DDET' into Approval Code field …")
-    return fill_approval_code(page, "DDET")
+# BES0027 — Date too old
+fix_bes0027 = _approval_code_fix("BES0027", "DDET")
 
 
 def fix_bom0002_duplicate_part(page: Page, claim_frame: Frame) -> bool:
@@ -1566,7 +1564,7 @@ def infer_part_with_claude(comments: str) -> str | None:
     try:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model=_CLAUDE_MODEL,
+            model=get_claude_model(),
             max_tokens=30,
             messages=[{"role": "user", "content": prompt}],
         )

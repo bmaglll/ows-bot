@@ -17,6 +17,7 @@ logs/
 # Environment & secrets
 .env
 .claude/
+config.local.toml
 
 # Assets & docs
 assets/

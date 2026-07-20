@@ -27,21 +27,21 @@ from playwright.sync_api import (
 )
 from dotenv import load_dotenv
 load_dotenv()
+from ows_config import CONFIG, get_cdp_url
 from ows_fixes import try_fix_errors
-# ── Config ────────────────────────────────────────────────────────────────────
-CDP_URL            = os.getenv("CDP_URL", "http://127.0.0.1:9222")
-DEFAULT_TIMEOUT_MS = 30_000
-SHORT_TIMEOUT_MS   = 5_000
-POLL_INTERVAL_S    = 2.0   # seconds between "Paid" status polls
-POLL_TIMEOUT_S     = 30    # max seconds to poll before moving on
-LOG_BASE           = "logs"             # Base log directory
-MAX_PAID_POLLS     = 30    # give up after this many polls (~60 s)
+# ── Config (see config.toml) ─────────────────────────────────────────────────
+CDP_URL            = get_cdp_url()
+DEFAULT_TIMEOUT_MS = CONFIG["timeouts"]["default_ms"]
+SHORT_TIMEOUT_MS   = CONFIG["timeouts"]["short_ms"]
+POLL_INTERVAL_S    = CONFIG["timeouts"]["poll_interval_s"]   # seconds between "Paid" status polls
+POLL_TIMEOUT_S     = CONFIG["timeouts"]["poll_timeout_s"]    # max seconds to poll before moving on
+LOG_BASE           = CONFIG["logging"]["base_dir"]           # Base log directory
 # Error codes that need user review — skip instead of stopping
-USER_REVIEW_ERRORS = {"RDC0002", "FSA0001", "FSA0003", "FSA0022", "ROV0039", "MCA0004", "TOT0001", "RVC0011", "SUB0001", "SUB0003", "SUB0021", "SCCK112", "SCCK109", "SCCK075", "SCCK069", "SCCK062", "SCCK055", "SCCK050", "SCCK046", "SCCK012", "SCCK602", "BES0206", "BES0254", "SFRNG81", "PAC1023", "LAB0003", "ATT0001", "SUB0005", "SDCU903", "SFRU462", "MIS0005", "SFRU330", "SFRUC13", "EFC16335", "SUB0013", "ROV0068", "SFRUD96", "ROV0024", "SCCK005", "SCCK012", "LAB0005", "SFRU364", "BOM0002", "SFRNG46", "RVC0013", "SFRU733", "PAC1023", "TV0001", "MIS0002", "SFPNK20"}
+USER_REVIEW_ERRORS = {c.upper() for c in CONFIG["user_review"]["errors"]}
 # Human-readable notes for user review errors (shown in log output)
-USER_REVIEW_NOTES = {
-    "ATT0001": "Requires document attachment",
-}
+USER_REVIEW_NOTES = dict(CONFIG["user_review"]["notes"])
+# Part numbers / non-error codes that the message regex picks up as false positives
+FALSE_POSITIVE_CODES = {c.upper() for c in CONFIG["scrape"]["false_positive_codes"]}
 # Selectors confirmed against live DOM
 RO_INPUT_SEL      = "input#RepairOrderNumber"
 INQUIRE_BTN_SEL   = "button:has-text('Inquire')"
@@ -113,7 +113,8 @@ def log_result(ro: str, status: str) -> None:
     log(f"Result logged to {log_file}: {ro} - {status}")
 # ── Frame helpers ─────────────────────────────────────────────────────────────
 def all_frames(page: Page) -> list[Frame]:
-    return [page.main_frame] + list(page.frames)
+    # page.frames already contains main_frame — keep it first, don't double it
+    return [page.main_frame] + [f for f in page.frames if f is not page.main_frame]
 def find_csr_frame(page: Page) -> Frame:
     """
     Find the Claim Status Report frame.
@@ -383,9 +384,6 @@ def scrape_claim_errors(page: Page) -> dict:
     # Check lock status
     is_locked = "is currently being modified" in html
 
-    # Part numbers / non-error codes that the regex picks up as false positives
-    FALSE_POSITIVE_CODES = {"MHT7000", "CPR0126", "REH52"}
-
     # Separate DEC0007 (success) from actual errors
     has_dec0007 = any(c.upper() == "DEC0007" for c in all_codes)
     error_codes = [c for c in all_codes if c.upper() != "DEC0007" and c.upper() not in FALSE_POSITIVE_CODES and not c.upper().startswith("ESPA")]
@@ -589,6 +587,24 @@ def poll_for_paid_status(csr: Frame, ro: str, line_num: str = None) -> str:
     log(f"Timed out after {POLL_TIMEOUT_S}s — status still not 'Paid'.")
     return "stuck"
 # ── Main ──────────────────────────────────────────────────────────────────────
+def pick_ows_page(context) -> Optional[Page]:
+    """Score every open tab and return the one most likely to be OWS."""
+    page = None
+    best_score = -1
+    for p in context.pages:
+        u = (p.url or "").lower()
+        t = ""
+        try: t = p.title().lower()
+        except Exception: pass
+        score = sum(
+            3 * (tok in u) + 2 * (tok in t)
+            for tok in ["warrantyprocessing", "dealerconnection", "prweb", "ows"]
+        ) + (1 if u and u != "about:blank" else 0)
+        if score > best_score:
+            best_score, page = score, p
+    return page
+
+
 def process_ro(ro: str, target_line: str = None) -> None:
     log(f"\\n{'='*60}")
     log(f"Processing RO: {ro}")
@@ -599,20 +615,7 @@ def process_ro(ro: str, target_line: str = None) -> None:
         if not browser.contexts:
             die("No browser contexts found. Start Chromium with --remote-debugging-port=9222.")
         context = browser.contexts[0]
-        # Pick best OWS tab
-        page = None
-        best_score = -1
-        for p in context.pages:
-            u = (p.url or "").lower()
-            t = ""
-            try: t = p.title().lower()
-            except Exception: pass
-            score = sum(
-                3 * (tok in u) + 2 * (tok in t)
-                for tok in ["warrantyprocessing", "dealerconnection", "prweb", "ows"]
-            ) + (1 if u and u != "about:blank" else 0)
-            if score > best_score:
-                best_score, page = score, p
+        page = pick_ows_page(context)
         if not page:
             die("No OWS tab found.")
         page.set_default_timeout(DEFAULT_TIMEOUT_MS)

@@ -7,6 +7,7 @@ Automated warranty claim submission tool built with Playwright. It attaches to a
 | Doc | What's in it |
 |---|---|
 | [docs/OVERVIEW.md](docs/OVERVIEW.md) | What the bot is, how it works step-by-step, project layout |
+| [docs/WORKFLOW.md](docs/WORKFLOW.md) | The day-to-day loop: run the bot → diagnose unknowns with Claude → bake in fixes |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Full `config.toml` reference — technicians, recalls, approval codes, etc. |
 | [docs/DEBUG_HARNESS.md](docs/DEBUG_HARNESS.md) | Using `harness.py` to debug the bot interactively |
 | [docs/MCP_SERVER.md](docs/MCP_SERVER.md) | Driving the harness from an LLM (Claude Code, etc.) via MCP |

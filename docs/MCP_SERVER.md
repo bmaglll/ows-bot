@@ -6,9 +6,10 @@ client — can drive it directly: attach to the live OWS browser, scrape claim
 errors, hunt for selectors, test individual fixes, and capture debug state,
 all as tool calls instead of shell commands.
 
-Like the interactive harness, **it never submits a claim.** Fixes mutate the
-open claim form (that's what they do), but the actual Submit stays a
-human/bot decision, off the MCP surface.
+The one irreversible action — **submit** — is gated: `submit_claim` is a dry
+run unless you pass `confirm=true`, and it refuses a claim with outstanding
+errors unless you also pass `force=true`. So Claude can drive a claim
+end-to-end while you approve each submit.
 
 ## Install
 
@@ -84,6 +85,7 @@ The server speaks stdio, the transport MCP clients expect.
 | `run_fix(error_code)` | Run the single fix for one error code against the open claim. |
 | `run_fix_loop(error_codes)` | The bot's full fix → PreValidate → re-scrape loop (can take minutes). |
 | `prevalidate()` | Click PreValidate, wait, re-scrape the result. |
+| `submit_claim(confirm=false, force=false)` | Submit the open claim. Dry run unless `confirm=true`; refuses a claim with errors/lock/no-DEC0007 unless `force=true`. The only irreversible tool. |
 | `reload_fixes()` | Re-import `ows_fixes.py` after editing it — no server restart. |
 
 **Config / offline**
@@ -103,7 +105,9 @@ A model debugging a stuck claim would call, roughly:
 3. For an unknown code: `read_comments()`, `find_inputs("ProgramCode")`,
    `query_selector("input[name*='ConditionCode']")` to locate fields.
 4. `run_fix("ROV0068")` then `prevalidate()` then `scrape_errors()` to test.
-5. `save_debug("stuck_513271")` to capture state for a human, or
+5. Once clean (`has_dec0007: true`, no errors), `submit_claim()` shows the
+   dry-run state; after you approve, `submit_claim(confirm=true)` submits.
+6. `save_debug("stuck_513271")` to capture state for a human, or
    `screenshot()` to look at the page.
 
 To develop a *new* fix, the model (or you) edits `ows_fixes.py`, then calls

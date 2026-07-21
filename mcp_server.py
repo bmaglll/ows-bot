@@ -47,7 +47,11 @@ mcp = FastMCP(
         "scrape_errors() to see what's wrong with the open claim, "
         "find_inputs()/query_selector() to locate fields, run_fix()/prevalidate() "
         "to test fixes, screenshot()/save_debug() to capture state. "
-        "This server never submits claims."
+        "The only irreversible action is submit_claim, and it is gated: it does "
+        "nothing (a dry run) unless you pass confirm=true, and it refuses to "
+        "submit a claim with outstanding errors unless you also pass force=true. "
+        "Always show the user the claim state and get their go-ahead before "
+        "calling submit_claim with confirm=true."
     ),
 )
 
@@ -451,6 +455,88 @@ def reload_fixes() -> dict:
     pick up new or changed fix functions without restarting the server."""
     importlib.reload(ows_fixes)
     return {"reloaded": True, "fix_count": len(ows_fixes.ERROR_FIXES)}
+
+
+@mcp.tool()
+def submit_claim(confirm: bool = False, force: bool = False) -> dict:
+    """Submit the open claim — the ONE irreversible action on this server.
+
+    By default this is a DRY RUN: it reports the claim state (error codes,
+    DEC0007, lock) and what would block a submit, and clicks nothing. Pass
+    confirm=true to actually click Submit. As a safety gate it refuses to
+    submit a claim that has outstanding error codes, no DEC0007 pre-validation,
+    or is locked by Ford's system — pass force=true to override that gate.
+
+    Always surface the claim state to the human and get their go-ahead before
+    calling this with confirm=true."""
+    import time as _time
+
+    def impl():
+        page = worker.require_page()
+        details = ows_bot.scrape_claim_errors(page)
+        errors = sorted(set(details["error_codes"]))
+        preview = {
+            "error_codes": errors,
+            "has_dec0007": details["has_dec0007"],
+            "is_locked": details["is_locked"],
+        }
+        blocked = []
+        if errors:
+            blocked.append(f"outstanding error codes: {errors}")
+        if not details["has_dec0007"]:
+            blocked.append("no DEC0007 pre-validation success")
+        if details["is_locked"]:
+            blocked.append("claim is locked by Ford's system")
+
+        if not confirm:
+            hint = "Dry run — pass confirm=true to submit."
+            if blocked:
+                hint += " Blocking conditions are present; a real submit would also need force=true."
+            return {"submitted": False, "dry_run": True, "would_block": blocked,
+                    "hint": hint, **preview}
+
+        if blocked and not force:
+            return {"submitted": False, "blocked": blocked,
+                    "hint": "Resolve these first, or pass force=true to submit anyway.",
+                    **preview}
+
+        # Click the Submit button in whichever frame has it
+        clicked = False
+        for fr in ows_bot.all_frames(page):
+            try:
+                btn = fr.locator(ows_bot.SUBMIT_BTN_SEL).first
+                if btn.count() > 0 and btn.is_visible():
+                    btn.scroll_into_view_if_needed()
+                    btn.click()
+                    clicked = True
+                    break
+            except Exception:
+                continue
+        if not clicked:
+            return {"submitted": False, "error": "Submit button not found.", **preview}
+
+        # Wait for the confirmation text or a post-submit error
+        deadline = _time.time() + CONFIG["timeouts"]["default_ms"] / 1000
+        while _time.time() < deadline:
+            post_html = ""
+            for fr in ows_bot.all_frames(page):
+                try:
+                    post_html += fr.content()
+                except Exception:
+                    pass
+            if ows_bot.SUBMITTED_TEXT in post_html:
+                return {"submitted": True, "confirmed": True,
+                        "message": ows_bot.SUBMITTED_TEXT, **preview}
+            post = ows_bot.scrape_claim_errors(page)
+            if post["error_codes"]:
+                return {"submitted": True, "confirmed": False,
+                        "post_submit_errors": sorted(set(post["error_codes"])),
+                        "messages": sorted(set(post["all_messages"]))}
+            _time.sleep(0.5)
+        return {"submitted": True, "confirmed": False,
+                "note": f"'{ows_bot.SUBMITTED_TEXT}' not seen within the timeout — "
+                        "check the page.", **preview}
+    return worker.call(impl)
 
 
 # ── Config / offline tools ───────────────────────────────────────────────────

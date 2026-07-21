@@ -53,6 +53,7 @@ ows_fixes.py     — one function per error code + ERROR_FIXES registry
 ows_config.py    — loads config.toml / config.local.toml / env into CONFIG
 config.toml      — all tunable data (technicians, recalls, error lists, …)
 harness.py       — interactive debug shell (live or against saved dumps)
+mcp_server.py    — MCP server exposing the harness to an LLM (see docs/MCP_SERVER.md)
 close_claim.py   — one-shot utility: close whatever claim tab is open
 diagnose_parts_grid.py — deep DOM diagnostic for the parts grid
 logs/YYYY-MM-DD/ — daily results CSV, remaining-RO list, debug dumps

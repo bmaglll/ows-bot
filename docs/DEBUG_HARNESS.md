@@ -5,6 +5,10 @@ running the full bot: inspect frames, scrape errors, test selectors, and run
 individual fixes on demand. It's the main tool for
 [developing new error fixes](ADDING_FIXES.md).
 
+> Want an **LLM** to drive these same capabilities instead of typing commands
+> yourself? `mcp_server.py` exposes them over the Model Context Protocol —
+> see [MCP_SERVER.md](MCP_SERVER.md).
+
 ## Modes
 
 ```bash

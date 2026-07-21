@@ -9,6 +9,7 @@ Automated warranty claim submission tool built with Playwright. It attaches to a
 | [docs/OVERVIEW.md](docs/OVERVIEW.md) | What the bot is, how it works step-by-step, project layout |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Full `config.toml` reference — technicians, recalls, approval codes, etc. |
 | [docs/DEBUG_HARNESS.md](docs/DEBUG_HARNESS.md) | Using `harness.py` to debug the bot interactively |
+| [docs/MCP_SERVER.md](docs/MCP_SERVER.md) | Driving the harness from an LLM (Claude Code, etc.) via MCP |
 | [docs/ADDING_FIXES.md](docs/ADDING_FIXES.md) | Step-by-step guide to adding a new error auto-fix |
 
 ## Features
@@ -28,6 +29,7 @@ Automated warranty claim submission tool built with Playwright. It attaches to a
 ```bash
 pip install playwright python-dotenv
 pip install anthropic          # optional — AI-assisted condition code/part inference
+pip install mcp                # optional — only for the MCP server (docs/MCP_SERVER.md)
 ```
 
 Requires Python 3.12+.
@@ -84,6 +86,8 @@ python3 harness.py --list-fixes             # list all registered auto-fixes
 
 See [docs/DEBUG_HARNESS.md](docs/DEBUG_HARNESS.md) for the full command reference and [docs/ADDING_FIXES.md](docs/ADDING_FIXES.md) for the workflow to add a fix for a new error code.
 
+An LLM can drive the same harness over the **Model Context Protocol** — attach to the browser, scrape errors, test fixes — via `mcp_server.py`. See [docs/MCP_SERVER.md](docs/MCP_SERVER.md).
+
 ## Project Structure
 
 ```
@@ -92,6 +96,7 @@ ows_fixes.py     — error fix registry with 35+ auto-fix handlers
 ows_config.py    — config loader (config.toml → config.local.toml → env)
 config.toml      — all tunable settings: technicians, recalls, error lists, …
 harness.py       — interactive debug harness
+mcp_server.py    — MCP server exposing the harness to an LLM
 close_claim.py   — utility to close open claim tabs
 docs/            — documentation
 ```

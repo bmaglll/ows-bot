@@ -77,6 +77,17 @@ The server speaks stdio, the transport MCP clients expect.
 | `screenshot(full_page=false)` | PNG of the current page, returned inline. |
 | `save_debug(label="mcp")` | Screenshot + all-frames HTML dump to `logs/…/debug/`. |
 
+**Interaction (dictated, click-by-click)** — raw actions for walking through a
+fix by hand. They scan every frame and act on the first visible match, exactly
+like the fix functions do, so steps that work here translate 1:1 into a baked
+fix. They mutate the form but never submit.
+
+| Tool | What it does |
+|---|---|
+| `fill_field(selector, value, press_tab=false)` | Type into the first visible input/textarea matching the selector. `press_tab` commits the value in some Pega fields. |
+| `click_element(selector)` | Click the first visible element matching the selector (buttons, radios, 'Add a row' links, tab icons). |
+| `select_option(selector, value="", label="")` | Choose an option in the first visible `<select>` (e.g. the Claim Type dropdown). |
+
 **Fixes**
 
 | Tool | What it does |
@@ -113,6 +124,37 @@ A model debugging a stuck claim would call, roughly:
 To develop a *new* fix, the model (or you) edits `ows_fixes.py`, then calls
 `reload_fixes()` and `run_fix(...)` again — no restart. See
 [ADDING_FIXES.md](ADDING_FIXES.md) for the fix-writing conventions.
+
+## Dictating a fix click-by-click, then baking it in
+
+The interaction tools let you drive the repair by hand and have Claude both
+execute and record it. You describe each step; Claude finds the field and acts;
+you watch it work; then Claude writes the exact steps into a fix function.
+
+A session for a new error `ZZZ9999` looks like:
+
+> **You:** Attach and scrape the open claim.
+> **Claude:** `attach()` → `scrape_errors()` → *"ZZZ9999, no fix registered."*
+>
+> **You:** Click the Approval Code field and type DDDO.
+> **Claude:** `find_inputs("Approval")` → *finds `input[name*='pApprovalCode']`* →
+> `fill_field("input[name*='pApprovalCode']", "DDDO", press_tab=true)` → *"filled
+> in frame 4."*
+>
+> **You:** Now click PreValidate.
+> **Claude:** `prevalidate()` → `scrape_errors()` → *"DEC0007 present, no errors —
+> it cleared."*
+>
+> **You:** That worked — bake it into the bot.
+> **Claude:** writes `fix_zzz9999()` in `ows_fixes.py` using the same selector and
+> value, registers it in `ERROR_FIXES`, `reload_fixes()`, then `run_fix("ZZZ9999")`
+> on a fresh claim to confirm the baked version behaves identically.
+
+Because `fill_field` / `click_element` / `select_option` use the same
+"scan all frames, first visible match" pattern as the fix functions, the
+selector Claude just used by hand is exactly what goes into the fix — no
+translation gap. Then it's a normal commit (`ows_fixes.py`, or `config.toml`
+if the fix turned out to be pure data). See [ADDING_FIXES.md](ADDING_FIXES.md).
 
 ## Notes
 

@@ -27,6 +27,7 @@ import os
 import queue
 import re
 import threading
+import time
 from typing import Any, Optional
 
 from dotenv import load_dotenv
@@ -348,6 +349,97 @@ def read_comments() -> str:
     def impl():
         worker.require_page()
         return ows_fixes.read_technician_comments(worker.page) or ""
+    return worker.call(impl)
+
+
+# ── Interaction tools (dictated, click-by-click) ─────────────────────────────
+# These are raw actions for walking through a fix by hand: fill a field, click
+# a button, pick a dropdown. They mirror exactly what the fix functions in
+# ows_fixes.py do (scan all frames, act on the first visible match), so the
+# steps that work here translate 1:1 into a baked-in fix. They mutate the open
+# form but never submit — that stays submit_claim.
+
+@mcp.tool()
+def fill_field(selector: str, value: str, press_tab: bool = False) -> dict:
+    """Type a value into the first visible input/textarea matching a CSS
+    selector, across all frames. The building block for walking a fix
+    click-by-click. Match on stable name fragments
+    (e.g. input[name*='ApprovalCode']), never full Pega names ($l1 changes).
+    Set press_tab=true to Tab out afterwards (commits the value in some Pega
+    fields). Returns the frame/name/id it acted on so the step can be
+    transcribed verbatim into a fix function."""
+    def impl():
+        page = worker.require_page()
+        for i, fr in enumerate(ows_bot.all_frames(page)):
+            try:
+                loc = fr.locator(selector).first
+                if loc.count() > 0 and loc.is_visible():
+                    loc.click()
+                    loc.fill(value)
+                    if press_tab:
+                        loc.press("Tab")
+                    time.sleep(0.3)
+                    return {"ok": True, "frame": i, "selector": selector,
+                            "name": loc.get_attribute("name") or "",
+                            "id": loc.get_attribute("id") or "", "value": value}
+            except Exception:
+                continue
+        return {"ok": False, "selector": selector,
+                "error": "No visible input matched in any frame."}
+    return worker.call(impl)
+
+
+@mcp.tool()
+def click_element(selector: str) -> dict:
+    """Click the first visible element matching a CSS selector, across all
+    frames — buttons, radios, 'Add a row' links, tab icons, etc. The building
+    block for walking a fix click-by-click. Returns the frame/name/id clicked
+    so the step can be transcribed into a fix function."""
+    def impl():
+        page = worker.require_page()
+        for i, fr in enumerate(ows_bot.all_frames(page)):
+            try:
+                loc = fr.locator(selector).first
+                if loc.count() > 0 and loc.is_visible():
+                    loc.scroll_into_view_if_needed()
+                    loc.click()
+                    time.sleep(0.3)
+                    return {"ok": True, "frame": i, "selector": selector,
+                            "name": loc.get_attribute("name") or "",
+                            "id": loc.get_attribute("id") or ""}
+            except Exception:
+                continue
+        return {"ok": False, "selector": selector,
+                "error": "No visible element matched in any frame."}
+    return worker.call(impl)
+
+
+@mcp.tool()
+def select_option(selector: str, value: str = "", label: str = "") -> dict:
+    """Choose an option in the first visible <select> matching a CSS selector,
+    across all frames (e.g. the Claim Type dropdown, select#ClaimTypeDesc).
+    Pass value= (the option's value attribute) or label= (its visible text).
+    The building block for walking a fix click-by-click."""
+    if not value and not label:
+        raise RuntimeError("Pass value= (option value) or label= (visible text).")
+
+    def impl():
+        page = worker.require_page()
+        for i, fr in enumerate(ows_bot.all_frames(page)):
+            try:
+                loc = fr.locator(selector).first
+                if loc.count() > 0 and loc.is_visible():
+                    if value:
+                        loc.select_option(value=value)
+                    else:
+                        loc.select_option(label=label)
+                    time.sleep(0.5)
+                    return {"ok": True, "frame": i, "selector": selector,
+                            "selected": value or label}
+            except Exception:
+                continue
+        return {"ok": False, "selector": selector,
+                "error": "No visible <select> matched in any frame."}
     return worker.call(impl)
 
 

@@ -45,11 +45,26 @@ poll_timeout_s = 30      # max seconds to poll for Paid before moving on
 [logging]
 base_dir = "logs"        # daily logs are written to <base_dir>/YYYY-MM-DD/
 
-# ── Claude / AI-assisted fixes (optional) ─────────────────────────────────────
-[claude]
-# Model used for condition-code / part inference fallbacks.
-# Overridden by the CLAUDE_MODEL environment variable.
-model = "claude-haiku-4-5-20251001"
+# ── AI-assisted fixes (optional) ──────────────────────────────────────────────
+# A couple of fixes (condition code for ROV0068, causal part for SUB0003) fall
+# back to an LLM when regex can't read the value from technician comments.
+# Any provider works — Claude is just the default. Leave provider = "none" to
+# disable AI inference entirely (those fixes then rely on regex only).
+[ai]
+provider = "anthropic"                     # anthropic | openai | gemini | ollama | none
+model    = "claude-haiku-4-5-20251001"     # a model id for the chosen provider
+# base_url = "http://localhost:11434/v1"   # only for OpenAI-compatible endpoints
+#
+# API keys come from the environment (.env):
+#   anthropic → ANTHROPIC_API_KEY
+#   openai    → OPENAI_API_KEY   (also any OpenAI-compatible endpoint via base_url)
+#   gemini    → GEMINI_API_KEY or GOOGLE_API_KEY
+#   ollama    → none (runs locally)
+#
+# Examples:
+#   OpenAI:  provider = "openai"  | model = "gpt-4o-mini"
+#   Gemini:  provider = "gemini"  | model = "gemini-2.0-flash"
+#   Ollama:  provider = "ollama"  | model = "llama3"   (base_url optional)
 
 # ── Approval codes entered by auto-fixes ──────────────────────────────────────
 # error code = approval code typed into the Approval Code field

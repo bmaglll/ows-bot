@@ -29,8 +29,13 @@ Automated warranty claim submission tool built with Playwright. It attaches to a
 
 ```bash
 pip install playwright python-dotenv
-pip install anthropic          # optional — AI-assisted condition code/part inference
 pip install mcp                # optional — only for the MCP server (docs/MCP_SERVER.md)
+
+# optional — only for AI-assisted condition-code/part inference; install the one
+# matching your [ai] provider in config.toml (Ollama needs no package):
+pip install anthropic          # provider = "anthropic" (default)
+# pip install openai           # provider = "openai" (or any OpenAI-compatible endpoint)
+# pip install google-generativeai   # provider = "gemini"
 ```
 
 Requires Python 3.12+.

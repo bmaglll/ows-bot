@@ -68,15 +68,35 @@ poll_timeout_s = 30      # give up polling for Paid after this many seconds
 base_dir = "logs"        # daily logs land in <base_dir>/YYYY-MM-DD/
 ```
 
-### `[claude]`
+### `[ai]` — provider for AI-assisted fixes
 
 ```toml
-[claude]
-model = "claude-haiku-4-5-20251001"   # model for AI-assisted CC/part inference
+[ai]
+provider = "anthropic"                     # anthropic | openai | gemini | ollama | none
+model    = "claude-haiku-4-5-20251001"     # a model id for the chosen provider
+# base_url = "http://localhost:11434/v1"   # OpenAI-compatible endpoints only
 ```
 
-Only used when `ANTHROPIC_API_KEY` is set and the `anthropic` package is
-installed; otherwise the AI fallback is silently skipped.
+Two fixes fall back to an LLM when regex can't read a value from the technician
+comments: the condition code (`ROV0068`) and the causal part (`SUB0003`). This
+is the **only** place an LLM runs *inside* the bot — everything else is
+deterministic. Any provider works; Claude is just the default.
+
+| Provider | `provider` | Example `model` | API key (env / `.env`) | Package |
+|---|---|---|---|---|
+| Anthropic | `anthropic` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` | `anthropic` |
+| OpenAI | `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | `openai` |
+| OpenAI-compatible | `openai` + `base_url` | (endpoint's id) | endpoint's key (or none) | `openai` |
+| Gemini | `gemini` | `gemini-2.0-flash` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `google-generativeai` |
+| Ollama (local) | `ollama` | `llama3` | none | none (stdlib HTTP) |
+| Disabled | `none` | — | — | — |
+
+Only the package for the provider you pick needs to be installed; if it's
+missing, the key is unset, or `provider = "none"`, the AI fallback is silently
+skipped and those fixes rely on regex alone. Env vars `AI_PROVIDER`, `AI_MODEL`,
+and `AI_BASE_URL` override this section for quick switching. (The legacy
+`[claude] model` / `CLAUDE_MODEL` still work as the Anthropic model when
+`[ai].model` is unset.)
 
 ### `[approval_codes]` — codes typed into the Approval Code field
 

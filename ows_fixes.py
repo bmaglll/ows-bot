@@ -15,7 +15,6 @@ from playwright.sync_api import Page, Frame
 from ows_config import (
     CONFIG,
     get_approval_code,
-    get_claude_model,
     get_stars_id,
 )
 
@@ -1095,22 +1094,14 @@ def extract_cc_from_comments(comments: str) -> str | None:
     return None
 
 
-def infer_cc_with_claude(comments: str) -> str | None:
+def infer_cc_with_llm(comments: str) -> str | None:
     """
-    Use Claude Haiku to infer condition code from technician comments.
-    Returns a validated 2-char code or None.
-    Requires: `anthropic` package installed + ANTHROPIC_API_KEY env var.
+    Use the configured LLM (config.toml → [ai]) to infer a condition code from
+    technician comments. Returns a validated 2-char code or None.
+    Works with any provider (Anthropic, OpenAI, Gemini, Ollama); if none is
+    configured/available the call returns None and the caller carries on.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        log("ANTHROPIC_API_KEY not set — skipping Claude inference.")
-        return None
-
-    try:
-        import anthropic
-    except ImportError:
-        log("anthropic package not installed — skipping Claude inference.")
-        return None
+    from ows_ai import infer
 
     # Build the code list for the prompt
     code_lines = []
@@ -1129,26 +1120,27 @@ def infer_cc_with_claude(comments: str) -> str | None:
         "Condition Code:"
     )
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=get_claude_model(),
-            max_tokens=10,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        result = response.content[0].text.strip().upper()
-        # Pad single digit
-        if len(result) == 1 and result.isdigit():
-            result = result.zfill(2)
-        if result in VALID_CONDITION_CODES:
-            log(f"Claude inferred condition code: '{result}'")
-            return result
-        else:
-            log(f"Claude returned '{result}' — not a valid condition code.")
-            return None
-    except Exception as e:
-        log(f"Claude API call failed: {e}")
+    raw = infer(prompt, max_tokens=10)
+    if not raw:
         return None
+    result = raw.strip().upper()
+    if len(result) == 1 and result.isdigit():
+        result = result.zfill(2)
+    if result in VALID_CONDITION_CODES:
+        log(f"LLM inferred condition code: '{result}'")
+        return result
+    # Model may have added prose — pull out the first valid code token
+    for tok in re.findall(r"\b[A-Z0-9]{1,2}\b", result):
+        cand = tok.zfill(2) if (len(tok) == 1 and tok.isdigit()) else tok
+        if cand in VALID_CONDITION_CODES:
+            log(f"LLM inferred condition code: '{cand}'")
+            return cand
+    log(f"LLM returned '{result}' — not a valid condition code.")
+    return None
+
+
+# Backward-compatible alias
+infer_cc_with_claude = infer_cc_with_llm
 
 
 def fix_rov0068_condition_code(page: Page, claim_frame: Frame) -> bool:
@@ -1218,7 +1210,7 @@ def fix_rov0068_condition_code(page: Page, claim_frame: Frame) -> bool:
         cc = extract_cc_from_comments(comments)
         if not cc:
             log("Regex did not find a condition code — trying Claude API fallback …")
-            cc = infer_cc_with_claude(comments)
+            cc = infer_cc_with_llm(comments)
         if not cc:
             log("Could not determine condition code — ROV0068 fix failed.")
             return False
@@ -1536,21 +1528,12 @@ def extract_part_from_comments(comments: str) -> str | None:
     return None
 
 
-def infer_part_with_claude(comments: str) -> str | None:
+def infer_part_with_llm(comments: str) -> str | None:
     """
-    Use Claude Haiku to identify the causal/replaced part number from comments.
-    Returns a validated part number string or None.
+    Use the configured LLM (config.toml → [ai]) to identify the causal/replaced
+    part number from comments. Returns a validated part number string or None.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        log("ANTHROPIC_API_KEY not set — skipping Claude part inference.")
-        return None
-
-    try:
-        import anthropic
-    except ImportError:
-        log("anthropic package not installed — skipping Claude part inference.")
-        return None
+    from ows_ai import infer
 
     prompt = (
         "You are a Ford warranty claim assistant. Based on the technician comments below, "
@@ -1561,26 +1544,23 @@ def infer_part_with_claude(comments: str) -> str | None:
         "Part number:"
     )
 
-    try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
-            model=get_claude_model(),
-            max_tokens=30,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        result = response.content[0].text.strip().upper()
-        if (result != "UNKNOWN"
-                and re.match(r'^[A-Z0-9]{4,10}$', result)
-                and re.search(r'\d', result)
-                and re.search(r'[A-Z]', result)):
-            log(f"  Claude inferred part number: '{result}'")
-            return result
-        else:
-            log(f"  Claude returned '{result}' — not a valid part number.")
-            return None
-    except Exception as e:
-        log(f"  Claude API call failed: {e}")
+    raw = infer(prompt, max_tokens=30)
+    if not raw:
         return None
+    # Model may add prose — check the whole reply, then each token
+    for cand in [raw.strip().upper()] + re.findall(r"[A-Z0-9]{4,10}", raw.upper()):
+        if (cand != "UNKNOWN"
+                and re.match(r'^[A-Z0-9]{4,10}$', cand)
+                and re.search(r'\d', cand)
+                and re.search(r'[A-Z]', cand)):
+            log(f"  LLM inferred part number: '{cand}'")
+            return cand
+    log(f"  LLM returned '{raw.strip()}' — no valid part number.")
+    return None
+
+
+# Backward-compatible alias
+infer_part_with_claude = infer_part_with_llm
 
 
 def fix_sub0003(page: Page, claim_frame: Frame) -> bool:
@@ -1614,7 +1594,7 @@ def fix_sub0003(page: Page, claim_frame: Frame) -> bool:
         if comments:
             part = extract_part_from_comments(comments)
             if not part:
-                part = infer_part_with_claude(comments)
+                part = infer_part_with_llm(comments)
             if part:
                 row_idx = add_causal_part(page, part)
                 if row_idx:

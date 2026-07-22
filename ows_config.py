@@ -43,6 +43,11 @@ DEFAULTS: dict = {
     "claude": {
         "model": "claude-haiku-4-5-20251001",
     },
+    "ai": {
+        "provider": "anthropic",
+        "model": "",
+        "base_url": "",
+    },
     "approval_codes": {
         "SFRU473": "DDDO",
         "ODM0001": "DDR4",
@@ -158,6 +163,20 @@ def get_claude_model() -> str:
     return os.getenv("CLAUDE_MODEL") or CONFIG["claude"]["model"]
 
 
+def get_ai_config() -> dict:
+    """Resolve the AI provider used for condition-code / part inference.
+    Env overrides: AI_PROVIDER, AI_MODEL, AI_BASE_URL. When the provider is
+    'anthropic' and no model is set, falls back to the legacy [claude] model /
+    CLAUDE_MODEL so existing setups keep working."""
+    ai = CONFIG.get("ai", {})
+    provider = (os.getenv("AI_PROVIDER") or ai.get("provider") or "anthropic").strip().lower()
+    model = (os.getenv("AI_MODEL") or ai.get("model") or "").strip()
+    if not model and provider == "anthropic":
+        model = get_claude_model()
+    base_url = (os.getenv("AI_BASE_URL") or ai.get("base_url") or "").strip()
+    return {"provider": provider, "model": model, "base_url": base_url}
+
+
 def get_approval_code(error_code: str, fallback: str = "") -> str:
     return CONFIG["approval_codes"].get(error_code.upper(), fallback)
 
@@ -167,7 +186,8 @@ if __name__ == "__main__":
     import json
     print(json.dumps(CONFIG, indent=2))
     print(f"\nEffective CDP URL:      {get_cdp_url()}")
-    print(f"Effective Claude model: {get_claude_model()}")
+    _ai = get_ai_config()
+    print(f"Effective AI provider:  {_ai['provider']} / {_ai['model'] or '(default)'}")
     tech = get_technician()
     print(f"Default technician:     {tech.get('name') if tech else '(none)'}")
     print(f"Effective STARS ID:     {get_stars_id() or '(not set)'}")

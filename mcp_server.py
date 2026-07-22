@@ -38,7 +38,7 @@ from mcp.server.fastmcp import FastMCP, Image
 
 import ows_bot
 import ows_fixes
-from ows_config import CONFIG, get_cdp_url, get_claude_model, get_stars_id
+from ows_config import CONFIG, get_ai_config, get_cdp_url, get_stars_id
 
 mcp = FastMCP(
     "ows-harness",
@@ -687,9 +687,11 @@ def get_config() -> dict:
         if t.get("key") == CONFIG["technicians"].get("default"):
             tech = t
             break
+    ai = get_ai_config()
     return {
         "cdp_url": get_cdp_url(),
-        "claude_model": get_claude_model(),
+        "ai_provider": ai["provider"],
+        "ai_model": ai["model"] or None,
         "default_technician": tech.get("name") if tech else None,
         "stars_id_configured": bool(get_stars_id()),
         "technician_keys": [t.get("key") for t in CONFIG["technicians"].get("list", [])],

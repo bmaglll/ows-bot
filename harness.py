@@ -41,7 +41,7 @@ from playwright.sync_api import sync_playwright, Page
 
 import ows_bot
 import ows_fixes
-from ows_config import CONFIG, get_cdp_url, get_stars_id, get_claude_model
+from ows_config import CONFIG, get_cdp_url, get_stars_id, get_ai_config
 
 try:
     import readline  # noqa: F401  (command history / line editing in the shell)
@@ -234,7 +234,8 @@ def cmd_config() -> None:
             tech = t
             break
     p(f"CDP URL            : {get_cdp_url()}")
-    p(f"Claude model       : {get_claude_model()}")
+    _ai = get_ai_config()
+    p(f"AI provider/model  : {_ai['provider']} / {_ai['model'] or '(default)'}")
     p(f"Default technician : {tech.get('name') if tech else '(none)'}")
     p(f"STARS ID           : {get_stars_id() or '(not set)'}")
     p(f"Technicians        : {[t.get('key') for t in CONFIG['technicians'].get('list', [])]}")

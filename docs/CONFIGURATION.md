@@ -87,9 +87,16 @@ deterministic. Any provider works; Claude is just the default.
 | Anthropic | `anthropic` | `claude-haiku-4-5-20251001` | `ANTHROPIC_API_KEY` | `anthropic` |
 | OpenAI | `openai` | `gpt-4o-mini` | `OPENAI_API_KEY` | `openai` |
 | OpenAI-compatible | `openai` + `base_url` | (endpoint's id) | endpoint's key (or none) | `openai` |
+| DeepSeek | `deepseek` | `deepseek-chat` | `DEEPSEEK_API_KEY` | `openai` |
+| Kimi (Moonshot) | `kimi` | `moonshot-v1-8k` | `MOONSHOT_API_KEY` / `KIMI_API_KEY` | `openai` |
 | Gemini | `gemini` | `gemini-2.0-flash` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `google-generativeai` |
 | Ollama (local) | `ollama` | `llama3` | none | none (stdlib HTTP) |
 | Disabled | `none` | — | — | — |
+
+DeepSeek and Kimi are OpenAI-compatible, so they use the `openai` package and
+each defaults to its own endpoint (no `base_url` needed). Kimi defaults to the
+international host `api.moonshot.ai`; for the China region set
+`base_url = "https://api.moonshot.cn/v1"`.
 
 Only the package for the provider you pick needs to be installed; if it's
 missing, the key is unset, or `provider = "none"`, the AI fallback is silently

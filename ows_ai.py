@@ -14,8 +14,14 @@ Which LLM is configurable in config.toml → [ai]; Claude is just the default:
 API keys come from the environment (.env):
     anthropic → ANTHROPIC_API_KEY
     openai    → OPENAI_API_KEY   (also any OpenAI-compatible endpoint via base_url)
+    deepseek  → DEEPSEEK_API_KEY
+    kimi      → MOONSHOT_API_KEY (or KIMI_API_KEY)
     gemini    → GEMINI_API_KEY or GOOGLE_API_KEY
     ollama    → none (local)
+
+DeepSeek and Kimi (Moonshot) are OpenAI-compatible, so they route through the
+`openai` package with their own default endpoint + key; override base_url to
+point elsewhere (e.g. Kimi's api.moonshot.cn region).
 
 infer(prompt, max_tokens) returns the model's text answer, or None if the
 provider is "none", unconfigured, its package isn't installed, or the call
@@ -35,6 +41,17 @@ def log(msg: str) -> None:
     print(f"[OWS][AI] {msg}", flush=True)
 
 
+# OpenAI-compatible hosted providers: default endpoint + which env keys to try.
+_OPENAI_COMPATIBLE = {
+    "deepseek": {"base_url": "https://api.deepseek.com",
+                 "key_envs": ["DEEPSEEK_API_KEY"]},
+    "kimi":     {"base_url": "https://api.moonshot.ai/v1",
+                 "key_envs": ["MOONSHOT_API_KEY", "KIMI_API_KEY"]},
+    "moonshot": {"base_url": "https://api.moonshot.ai/v1",
+                 "key_envs": ["MOONSHOT_API_KEY", "KIMI_API_KEY"]},
+}
+
+
 def infer(prompt: str, max_tokens: int = 20) -> str | None:
     cfg = get_ai_config()
     provider, model, base_url = cfg["provider"], cfg["model"], cfg["base_url"]
@@ -48,13 +65,23 @@ def infer(prompt: str, max_tokens: int = 20) -> str | None:
     try:
         if provider == "anthropic":
             return _anthropic(prompt, model, max_tokens)
-        if provider in ("openai", "openai_compatible", "compatible"):
-            return _openai(prompt, model, max_tokens, base_url)
         if provider in ("gemini", "google"):
             return _gemini(prompt, model, max_tokens)
         if provider == "ollama":
             return _ollama(prompt, model or "llama3", max_tokens, base_url)
-        log(f"Unknown AI provider '{provider}'. Use anthropic | openai | gemini | ollama | none.")
+        # OpenAI + OpenAI-compatible hosted providers (deepseek, kimi/moonshot)
+        compat = _OPENAI_COMPATIBLE.get(provider)
+        if provider in ("openai", "openai_compatible", "compatible") or compat:
+            url = base_url or (compat["base_url"] if compat else "")
+            key_envs = compat["key_envs"] if compat else ["OPENAI_API_KEY"]
+            key = next((os.getenv(e) for e in key_envs if os.getenv(e)), "")
+            # A hosted endpoint needs a key; a user-supplied base_url may be local
+            if not key and (compat or not url):
+                log(f"{key_envs[0]} not set — skipping AI inference.")
+                return None
+            return _openai(prompt, model, max_tokens, url, key)
+        log(f"Unknown AI provider '{provider}'. Use anthropic | openai | "
+            f"deepseek | kimi | gemini | ollama | none.")
         return None
     except Exception as e:
         log(f"{provider} call failed: {e}")
@@ -79,18 +106,15 @@ def _anthropic(prompt: str, model: str, max_tokens: int) -> str | None:
                    if getattr(b, "type", "") == "text").strip()
 
 
-def _openai(prompt: str, model: str, max_tokens: int, base_url: str) -> str | None:
-    # base_url set → an OpenAI-compatible endpoint (may not need a key)
-    if not base_url and not os.getenv("OPENAI_API_KEY"):
-        log("OPENAI_API_KEY not set — skipping AI inference.")
-        return None
+def _openai(prompt: str, model: str, max_tokens: int,
+            base_url: str, api_key: str) -> str | None:
+    """Shared OpenAI-compatible caller — used by openai, deepseek, and kimi."""
     try:
         import openai
     except ImportError:
         log("openai package not installed — skipping (pip install openai).")
         return None
-    client = openai.OpenAI(base_url=base_url or None,
-                           api_key=os.getenv("OPENAI_API_KEY") or "not-needed")
+    client = openai.OpenAI(base_url=base_url or None, api_key=api_key or "not-needed")
     resp = client.chat.completions.create(
         model=model, max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],

@@ -34,8 +34,9 @@ pip install mcp                # optional — only for the MCP server (docs/MCP_
 # optional — only for AI-assisted condition-code/part inference; install the one
 # matching your [ai] provider in config.toml (Ollama needs no package):
 pip install anthropic          # provider = "anthropic" (default)
-# pip install openai           # provider = "openai" (or any OpenAI-compatible endpoint)
+# pip install openai           # provider = "openai" | "deepseek" | "kimi"
 # pip install google-generativeai   # provider = "gemini"
+#                              # provider = "ollama" needs no package (local)
 ```
 
 Requires Python 3.12+.

@@ -51,20 +51,28 @@ base_dir = "logs"        # daily logs are written to <base_dir>/YYYY-MM-DD/
 # Any provider works — Claude is just the default. Leave provider = "none" to
 # disable AI inference entirely (those fixes then rely on regex only).
 [ai]
-provider = "anthropic"                     # anthropic | openai | gemini | ollama | none
+provider = "anthropic"                     # anthropic|openai|deepseek|kimi|gemini|ollama|none
 model    = "claude-haiku-4-5-20251001"     # a model id for the chosen provider
-# base_url = "http://localhost:11434/v1"   # only for OpenAI-compatible endpoints
+# base_url = "http://localhost:11434/v1"   # override the provider's endpoint
 #
 # API keys come from the environment (.env):
 #   anthropic → ANTHROPIC_API_KEY
 #   openai    → OPENAI_API_KEY   (also any OpenAI-compatible endpoint via base_url)
+#   deepseek  → DEEPSEEK_API_KEY
+#   kimi      → MOONSHOT_API_KEY (or KIMI_API_KEY)
 #   gemini    → GEMINI_API_KEY or GOOGLE_API_KEY
 #   ollama    → none (runs locally)
 #
 # Examples:
-#   OpenAI:  provider = "openai"  | model = "gpt-4o-mini"
-#   Gemini:  provider = "gemini"  | model = "gemini-2.0-flash"
-#   Ollama:  provider = "ollama"  | model = "llama3"   (base_url optional)
+#   OpenAI:    provider = "openai"    | model = "gpt-4o-mini"
+#   DeepSeek:  provider = "deepseek"  | model = "deepseek-chat"
+#   Kimi:      provider = "kimi"      | model = "moonshot-v1-8k"  (or a kimi-k2 id)
+#   Gemini:    provider = "gemini"    | model = "gemini-2.0-flash"
+#   Ollama:    provider = "ollama"    | model = "llama3"   (base_url optional)
+#
+# DeepSeek and Kimi are OpenAI-compatible; each defaults to its own endpoint.
+# Kimi defaults to the international host (api.moonshot.ai); for the China
+# region set base_url = "https://api.moonshot.cn/v1".
 
 # ── Approval codes entered by auto-fixes ──────────────────────────────────────
 # error code = approval code typed into the Approval Code field
